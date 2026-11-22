@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "heartshud",
+  "version": "${version}",
+  "name": "Hearts HUD",
+  "description": "Pokazuje nick i serca gracza obok nazwy trzymanego itemu.",
+  "authors": ["pingwinek337"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["pl.heartshud.HeartsHudClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "1.21.4",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
