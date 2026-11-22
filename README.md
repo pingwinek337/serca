@@ -2,7 +2,7 @@
 
 Mod kliencki Fabric. Obok nazwy trzymanego itemu (np. "Elytra Hydry") pokazuje nick gracza i ilosc jego serc.
 
-- gracz = ten, na ktorego patrzysz (celownik); jesli na nikogo - najblizszy gracz w zasiegu 30 blokow
+- pokazuje OSTATNIEGO gracza, ktorego uderzyles (nick + serca, odswiezane gdy jest w zasiegu)
 - serca = zdrowie + absorption / 2
 
 Budowanie: `gradle build` (lub `./gradlew build`), gotowy plik w `build/libs/`.

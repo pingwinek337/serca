@@ -3,13 +3,14 @@
   "id": "heartshud",
   "version": "${version}",
   "name": "Hearts HUD",
-  "description": "Pokazuje nick i serca gracza obok nazwy trzymanego itemu.",
+  "description": "Pokazuje nick i serca ostatnio uderzonego gracza obok napisu nad hotbarem.",
   "authors": ["pingwinek337"],
   "license": "MIT",
   "environment": "client",
   "entrypoints": {
     "client": ["pl.heartshud.HeartsHudClient"]
   },
+  "mixins": ["heartshud.mixins.json"],
   "depends": {
     "fabricloader": ">=0.16.0",
     "minecraft": "1.21.4",

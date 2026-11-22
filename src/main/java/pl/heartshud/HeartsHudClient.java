@@ -1,85 +1,101 @@
 package pl.heartshud;
 
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.text.Text;
+import net.minecraft.util.ActionResult;
+
+import java.util.Locale;
+import java.util.UUID;
 
 /**
- * Rysuje obok nazwy trzymanego itemu (np. "Elytra Hydry") nick gracza i ilosc jego serc.
- * Gracz = ten, na ktorego patrzysz; jesli na nikogo nie patrzysz - najblizszy gracz w zasiegu.
+ * Pokazuje nick i serca OSTATNIEGO gracza, ktorego uderzyles,
+ * obok napisu nad hotbarem (action bar, np. "Elytra Hydry").
  */
 public class HeartsHudClient implements ClientModInitializer {
 
-	private static final double MAX_DISTANCE = 30.0;
+	private static UUID lastUuid;
+	private static String lastName;
+	private static float lastHp = -1f;
+
+	// ustawiane przez mixin (action bar)
+	public static Text overlayText;
+	public static long overlayUntilMs;
+
+	public static void onOverlay(Text text) {
+		overlayText = text;
+		overlayUntilMs = System.currentTimeMillis() + 3000;
+	}
 
 	@Override
 	public void onInitializeClient() {
+		AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+			if (world.isClient() && entity instanceof PlayerEntity target && target != player) {
+				lastUuid = target.getUuid();
+				lastName = target.getName().getString();
+				lastHp = target.getHealth() + target.getAbsorptionAmount();
+			}
+			return ActionResult.PASS;
+		});
+
+		// odswiezaj serca ostatnio uderzonego gracza, gdy jest w zasiegu
+		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			if (client.world == null || lastUuid == null) return;
+			PlayerEntity p = client.world.getPlayerByUuid(lastUuid);
+			if (p != null) {
+				lastName = p.getName().getString();
+				lastHp = p.getHealth() + p.getAbsorptionAmount();
+			}
+		});
+
+		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+			lastUuid = null;
+			lastName = null;
+			lastHp = -1f;
+			overlayText = null;
+		});
+
 		HudRenderCallback.EVENT.register((context, tickCounter) -> render(context));
 	}
 
 	private void render(DrawContext context) {
 		MinecraftClient client = MinecraftClient.getInstance();
-		if (client.player == null || client.world == null || client.options.hudHidden) {
+		if (client.player == null || client.options.hudHidden || lastName == null || lastHp < 0) {
 			return;
 		}
-
-		PlayerEntity target = findTarget(client);
-		if (target == null) {
-			return;
-		}
-
-		float hp = target.getHealth() + target.getAbsorptionAmount();
-		String hearts = formatHearts(hp);
 
 		TextRenderer tr = client.textRenderer;
-		int screenW = context.getScaledWindowWidth();
-		int screenH = context.getScaledWindowHeight();
+		int w = context.getScaledWindowWidth();
+		int h = context.getScaledWindowHeight();
 
-		// pozycja nazwy itemu nad hotbarem (jak w vanilla InGameHud)
-		int y = screenH - 59;
-		if (client.interactionManager != null && !client.interactionManager.hasStatusBars()) {
-			y += 14;
+		Text label = Text.literal(lastName + " ")
+				.append(Text.literal("♥ " + formatHearts(lastHp)).styled(s -> s.withColor(0xFF5555)));
+
+		// action bar jest rysowany na y = h - 68, tekst od y = -4 => h - 72
+		int y = h - 72;
+		int x;
+		boolean overlayVisible = overlayText != null && System.currentTimeMillis() < overlayUntilMs;
+		if (overlayVisible) {
+			x = w / 2 + tr.getWidth(overlayText) / 2 + 8;
+		} else {
+			x = w / 2 - tr.getWidth(label) / 2;
 		}
-
-		Text itemName = client.player.getMainHandStack().getName();
-		int nameWidth = client.player.getMainHandStack().isEmpty() ? 0 : tr.getWidth(itemName);
-		int x = screenW / 2 + nameWidth / 2 + 8;
-
-		Text label = Text.literal(target.getName().getString() + " ")
-				.append(Text.literal("❤ " + hearts).styled(s -> s.withColor(0xFF5555)));
 
 		context.drawTextWithShadow(tr, label, x, y, 0xFFFFFF);
 	}
 
-	private PlayerEntity findTarget(MinecraftClient client) {
-		Entity looked = client.targetedEntity;
-		if (looked instanceof PlayerEntity p && p != client.player) {
-			return p;
-		}
-
-		PlayerEntity nearest = null;
-		double best = MAX_DISTANCE * MAX_DISTANCE;
-		for (PlayerEntity p : client.world.getPlayers()) {
-			if (p == client.player) continue;
-			double d = p.squaredDistanceTo(client.player);
-			if (d < best) {
-				best = d;
-				nearest = p;
-			}
-		}
-		return nearest;
-	}
-
-	private String formatHearts(float hp) {
+	private static String formatHearts(float hp) {
 		float hearts = hp / 2.0f;
 		if (hearts == (int) hearts) {
 			return String.valueOf((int) hearts);
 		}
-		return String.format(java.util.Locale.ROOT, "%.1f", hearts);
+		return String.format(Locale.ROOT, "%.1f", hearts);
 	}
 }
